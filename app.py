@@ -14,13 +14,26 @@ st.markdown("ابحث في المستندات السحابية وسيتم توج
 # 2. قائمة روابط ملفات الـ PDF الحقيقية على Dropbox
 # ------------------------------------------------------------------
 DROPBOX_PDFS = {
-    "Règlement S9B": "https://www.dropbox.com/scl/fi/gm148owemf6xxx4vas3q8/S9B.pdf?rlkey=1rgyjlei8gp6265cc9uwp2ah6&st=1edpxuqv&dl=1",
-    "Règlement S3A": "https://www.dropbox.com/scl/fi/zrw97rtsxii6oa4yg0exy/S3A.pdf?rlkey=isw2t00hy9zuk69zjjvuslscj&st=o4ixucvu&dl=1",
-    "Règlement S1E": "https://www.dropbox.com/scl/fi/qk4lo1q82whd6l0uilaob/S1E.pdf?rlkey=m1ks2st4jevmk1sjyzjgvxgo6&st=mv3lx6qf&dl=1",
-    "Règlement S2A": "https://www.dropbox.com/scl/fi/8kvltmdnas11rfkbf95ej/S2A.pdf?rlkey=6labn4o0ef76a07lxxrtay204&st=sp7q2v02&dl=1",
-    "Règlement S7A": "https://www.dropbox.com/scl/fi/a9tdxz3o7195y2yyqa12c/S7A-1-P.pdf?rlkey=u33nws3syb02fcbm8dmk2eqq8&st=wbaf8hdk&dl=1",
+    "Règlement S1A - Titre I": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/R%C3%A8glement%20S1A%20-%20Titre%20I%20%20version%2003%20VS.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S1A titre II facs 0": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S1A%20titre%20II%20facs%200%20zc%20VF%20sign%C3%A9.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S1A titre II facs 1": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S1A%20titre%20II%20facs%201%20zc%20VF%20sign%C3%A9.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S1A titre II facs 2": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S1A%20titre%20II%20facs%202%20zc%20VF%20sign%C3%A9.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S1A titre II facs 3": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S1A%20titre%20II%20facs%203%20zc%20VF%20sign%C3%A9.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S1A titre II facs 4": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S1A%20titre%20II%20facs%204%20zc%20VF%20sign%C3%A9.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S7A fasc 8": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S7A%20fasc%208%20MA%2080%20VF.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement RG S7A fasc 14": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/RG%20S7A%20fasc%2014%20RGV%20zc%20V02.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S0": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S0.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S1B": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S1B.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S1D": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S1D.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S1E": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S1E.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S2A": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S2A.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S2B": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S2B.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S2C": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S2C.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S2D": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S2D.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S3A": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S3A.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S3B": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S3B.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
+    "Règlement S4A": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S4A.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
 }
-
 @st.cache_resource
 def load_and_index_from_dropbox():
     """تحميل المستندات من Dropbox وقراءتها في الذاكرة"""
