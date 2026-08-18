@@ -80,7 +80,7 @@ DROPBOX_PDFS = {
     "CG S2C n8 - Manuel incident VF signé.pdf": "https://www.dropbox.com/scl/fi/2ogvhs66p1q20taq6f5t3/CG-S2C-n8-Manuel-incident-VF-sign.pdf?rlkey=a6250vu3i1m68nh12lz3mu76a&dl=1",
     "CG S2C n°1.pdf": "https://www.dropbox.com/scl/fi/he7yc336zd5a6t9ejy7l1/CG-S2C-n-1.pdf?rlkey=54i3almjz4l2cxcqmogt78cjr&dl=1",
     "CG S2C n°2.pdf": "https://www.dropbox.com/scl/fi/4blgji0whqtdv2j9jwr18/CG-S2C-n-2.pdf?rlkey=be6hqgv8kjnxa9mxzkhu8wgnh&dl=1",
-    "CG S2C n7 exploitation du systeme de detection des boites chaudes (DBC) sol et embarque, et du systeme de detection de freins bloques (DFB) V05.pdf": "https://www.dropbox.com/scl/fi/hxftftoo44kbj9r4mg2a0/CG-S2C-n7-exploitation-du-systeme-de-detection-des-boites-chaudes-DBC-sol-et-embarque-et-du-systeme-de-detection-de-freins-bloques-DFB-V05.pdf?rlkey=9ixzcfv0c47jpsqkpwujxkg23&dl=1",
+    "https://www.dropbox.com/scl/fo/cyeehxuyf5sy78df13jy1/AJffWQ_PGSX1I7F9jmcqivw/CG%20CGP/CG%20S2C%20n7%20exploitation%20du%20systeme%20de%20detection%20des%20boites%20chaudes%20(DBC)%20sol%20et%20embarque%2C%20et%20du%20systeme%20de%20detection%20de%20freins%20bloques%20(DFB)%20V05.pdf?rlkey=tnfkrncj1uebjrd4v1y4too5v&st=3xolpjbc&dl=1",
     "CG S2C n°3.pdf": "https://www.dropbox.com/scl/fi/l4oj8gzhxwex928y9mz7s/CG-S2C-n-3.pdf?rlkey=pctni0fb089tqstz696i3ditl&dl=1",
     "CG S2D n°2 - Points facilement repérables zc VF.pdf": "https://www.dropbox.com/scl/fi/x6r5fidwkdi5o0aacqh5u/CG-S2D-n-2-Points-facilement-rep-rables-zc-VF.pdf?rlkey=kn5x1u3t0vjfvsfpftxj4t70u&dl=1",
     "CG S2D n°3 derangement systèmes embarqués zc VF signé.pdf": "https://www.dropbox.com/scl/fi/1j7285ayllkc4z9sw05og/CG-S2D-n-3-derangement-syst-mes-embarqu-s-zc-VF-sign.pdf?rlkey=cglhcs6j2g33gvylhfr2ewrvr&dl=1",
