@@ -11,7 +11,7 @@ st.title("🚆 محرك البحث المباشر في لوائح ONCF")
 st.markdown("ابحث في المستندات السحابية وسيتم توجيهك للمادة والصفحة مباشرة.")
 
 # ------------------------------------------------------------------
-# 2. قائمة روابط ملفات الـ PDF الحقيقية على Dropbox
+# 2. قائمة جميع روابط الـ PDF الـ 37 الحقيقية من Dropbox
 # ------------------------------------------------------------------
 DROPBOX_PDFS = {
     "Règlement S1A - Titre I": "https://www.dropbox.com/scl/fi/0s8pe3sfugugujyxzby2d/R-glement-S1A-Titre-I-version-03-VS.pdf?rlkey=ldghn6rtfu1tqyavmyiwtct67&st=uqwy0fun&dl=1",
@@ -55,17 +55,18 @@ DROPBOX_PDFS = {
 
 @st.cache_resource
 def load_and_index_from_dropbox():
-    """تحميل المستندات من Dropbox وقراءتها في الذاكرة"""
+    """تحميل المستندات من Dropbox وقراءتها بالكامل باستخدام المنطق الأول المستقر"""
     search_index = []
     
     for doc_name, url in DROPBOX_PDFS.items():
-        # التأكد من أن الرابط مباشر للتحميل بقيمة dl=1
+        # التأكد من جعل رابط Dropbox يحمل مباشرة بدلاً من العرض
         download_url = url.replace("dl=0", "dl=1")
         if "dl=1" not in download_url:
             download_url += "&dl=1" if "?" in download_url else "?dl=1"
         
         try:
-            response = requests.get(download_url, timeout=30)
+            # قراءة المادة عبر التنزيل المباشر
+            response = requests.get(download_url, timeout=45)
             if response.status_code == 200:
                 pdf_file = io.BytesIO(response.content)
                 reader = pypdf.PdfReader(pdf_file)
@@ -77,8 +78,7 @@ def load_and_index_from_dropbox():
                             "doc_name": doc_name,
                             "page": page_num,
                             "text": text,
-                            "download_url": download_url,
-                            "view_url": url.replace("dl=1", "dl=0")
+                            "original_url": url
                         })
         except Exception as e:
             st.error(f"خطأ أثناء قراءة {doc_name}: {e}")
@@ -107,29 +107,26 @@ if query:
         for res in results:
             doc_name = res["doc_name"]
             page_num = res["page"]
-            snippet = res["text"][:400].replace("\n", " ") + "..."
-            download_url = res["download_url"]
-            view_url = res["view_url"]
+            snippet = res["text"][:350].replace("\n", " ") + "..."
             
-            # رابط المعاينة المستند على Google Docs Viewer المستقر
-            encoded_download_url = urllib.parse.quote(download_url)
-            gdocs_viewer_url = f"https://docs.google.com/gview?url={encoded_download_url}&embedded=true"
+            # إعداد رابط البث المباشر مع استبدال النطاق ليدعم الفتح المبسط
+            raw_url = res["original_url"].replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("dl=0", "dl=1")
+            
+            # ترميز الرابط لاستخدامه في قارئ PDF.js
+            encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
+            pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
 
             with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
                 st.write(f"**المقتطع النصي:** {snippet}")
                 
-                # أزرار التوجيه المباشر
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"🔗 [**تحميل / فتح المستند كاملاً (Dropbox)**]({view_url})")
-                with col2:
-                    st.markdown(f"📥 [**تنزيل ملف الـ PDF مباشرة**]({download_url})")
+                # رابط خارجي مباشر يفتح القارئ في تبويب جديد على الصفحة بالضبط
+                st.markdown(f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})", unsafe_allow_html=True)
                 
                 st.markdown("---")
-                st.caption(f"📺 معاينة الصفحة (Google Viewer):")
+                st.caption(f"📺 المعاينة المباشرة للصفحة {page_num}:")
                 
-                # استخدام Google Docs Viewer المباشر والموثوق للـ IFRAME
-                pdf_iframe = f'<iframe src="{gdocs_viewer_url}#page={page_num}" width="100%" height="500" frameborder="0"></iframe>'
+                # العرض المدمج
+                pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
                 st.markdown(pdf_iframe, unsafe_allow_html=True)
 else:
     st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
