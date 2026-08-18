@@ -34,12 +34,14 @@ DROPBOX_PDFS = {
     "Règlement S3B": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S3B.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
     "Règlement S4A": "https://www.dropbox.com/scl/fo/h8le43o5bndhec2b81zyg/AIHHA4y0-Wr8Wnw_xl0fPNg/S4A.pdf?rlkey=g1xxzzbmecegg21vxdpgd6app&dl=1",
 }
+
 @st.cache_resource
 def load_and_index_from_dropbox():
     """تحميل المستندات من Dropbox وقراءتها في الذاكرة"""
     search_index = []
     
     for doc_name, url in DROPBOX_PDFS.items():
+        # التأكد من أن الرابط مباشر للتحميل بقيمة dl=1
         download_url = url.replace("dl=0", "dl=1")
         if "dl=1" not in download_url:
             download_url += "&dl=1" if "?" in download_url else "?dl=1"
@@ -57,7 +59,8 @@ def load_and_index_from_dropbox():
                             "doc_name": doc_name,
                             "page": page_num,
                             "text": text,
-                            "original_url": url
+                            "download_url": download_url,
+                            "view_url": url.replace("dl=1", "dl=0")
                         })
         except Exception as e:
             st.error(f"خطأ أثناء قراءة {doc_name}: {e}")
@@ -86,26 +89,29 @@ if query:
         for res in results:
             doc_name = res["doc_name"]
             page_num = res["page"]
-            snippet = res["text"][:350].replace("\n", " ") + "..."
+            snippet = res["text"][:400].replace("\n", " ") + "..."
+            download_url = res["download_url"]
+            view_url = res["view_url"]
             
-            # إعداد رابط البث المباشر المباشر بدون تنزيل
-            raw_url = res["original_url"].replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("dl=0", "dl=1")
-            
-            # ترميز الرابط لاستخدامه في قارئ PDF.js
-            encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
-            pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
+            # رابط المعاينة المستند على Google Docs Viewer المستقر
+            encoded_download_url = urllib.parse.quote(download_url)
+            gdocs_viewer_url = f"https://docs.google.com/gview?url={encoded_download_url}&embedded=true"
 
             with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
                 st.write(f"**المقتطع النصي:** {snippet}")
                 
-                # رابط خارجي مباشر يفتح القارئ المتقدم في تبويب جديد على الصفحة بالضبط
-                st.markdown(f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})", unsafe_allow_html=True)
+                # أزرار التوجيه المباشر
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"🔗 [**تحميل / فتح المستند كاملاً (Dropbox)**]({view_url})")
+                with col2:
+                    st.markdown(f"📥 [**تنزيل ملف الـ PDF مباشرة**]({download_url})")
                 
                 st.markdown("---")
-                st.caption(f"📺 المعاينة المباشرة للصفحة {page_num}:")
+                st.caption(f"📺 معاينة الصفحة (Google Viewer):")
                 
-                # العرض المدمج باستخدام القارئ المتقدم القادر على تجاوز حظر Dropbox
-                pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
+                # استخدام Google Docs Viewer المباشر والموثوق للـ IFRAME
+                pdf_iframe = f'<iframe src="{gdocs_viewer_url}#page={page_num}" width="100%" height="500" frameborder="0"></iframe>'
                 st.markdown(pdf_iframe, unsafe_allow_html=True)
 else:
     st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
