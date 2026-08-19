@@ -1,9 +1,9 @@
-from concurrent.futures import ThreadPoolExecutor
-import io
-import urllib.parse
+import streamlit as st
 import pypdf
 import requests
-import streamlit as st
+import io
+import urllib.parse
+
 # 1. إعدادات الصفحة
 st.set_page_config(page_title="محرك بحث لوائح ONCF", layout="wide", page_icon="🚆")
 
@@ -267,116 +267,80 @@ DROPBOX_PDFS = {
     "CDP TR 46a n°7.pdf": "https://dl.dropboxusercontent.com/scl/fi/s41m0943lm510943lm43l/CDP-TR-46a-n-7.pdf?rlkey=m901s41m0943lm510943lm43l",
     "CDs S2B n°1.pdf": "https://dl.dropboxusercontent.com/scl/fi/m901s41m0943lm510943l/CDs-S2B-n-1.pdf?rlkey=m43lm901s41m0943lm510943lm"
 }
-# ==========================================
-# 2. إعدادات الواجهة والتحسين البصري
-# ==========================================
-st.set_page_config(
-    page_title="محرك البحث في لوائح ONCF", page_icon="🚆", layout="centered"
-)
-
-st.title("🚆 محرك البحث المباشر في لوائح ONCF")
-st.write(
-    "ابحث في المستندات السحابية وسيتم توجيهك للمادة والصفحة مباشرة."
-)
-
-
-# ==========================================
-# 3. دالة معالجة وتحميل الملفات المتوازية
-# ==========================================
-def process_single_pdf(item):
-    """دالة فرعية لتحميل وقراءة ملف واحد بشكل سريع"""
-    doc_name, url = item
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-
-    # تحويل الرابط تلقائياً إلى رابط مباشر لتفادي صفحة معاينة Dropbox
-    download_url = url.replace("www.dropbox.com", "dl.dropboxusercontent.com")
-    if "dl=0" in download_url:
-        download_url = download_url.replace("dl=0", "dl=1")
-    elif "dl=1" not in download_url:
-        download_url += "&dl=1" if "?" in download_url else "?dl=1"
-
-    doc_results = []
-    try:
-        # مهلة الاتصال 8 ثوانٍ لتجاوز أي رابط متعثر بمرونة
-        response = requests.get(download_url, headers=headers, timeout=8)
-        if response.status_code == 200:
-            pdf_file = io.BytesIO(response.content)
-            reader = pypdf.PdfReader(pdf_file)
-
-            for page_num, page in enumerate(reader.pages, start=1):
-                text = page.extract_text()
-                if text:
-                    doc_results.append(
-                        {
+@st.cache_resource
+def load_and_index_from_dropbox():
+    """تحميل المستندات من Dropbox وقراءتها بالكامل باستخدام المنطق الأول المستقر"""
+    search_index = []
+    
+    for doc_name, url in DROPBOX_PDFS.items():
+        # التأكد من جعل رابط Dropbox يحمل مباشرة بدلاً من العرض
+        download_url = url.replace("dl=0", "dl=1")
+        if "dl=1" not in download_url:
+            download_url += "&dl=1" if "?" in download_url else "?dl=1"
+        
+        try:
+            # قراءة المادة عبر التنزيل المباشر
+            response = requests.get(download_url, timeout=45)
+            if response.status_code == 200:
+                pdf_file = io.BytesIO(response.content)
+                reader = pypdf.PdfReader(pdf_file)
+                
+                for page_num, page in enumerate(reader.pages, start=1):
+                    text = page.extract_text()
+                    if text:
+                        search_index.append({
                             "doc_name": doc_name,
                             "page": page_num,
                             "text": text,
-                            "direct_download_url": download_url,
-                        }
-                    )
-    except Exception:
-        pass  # استمرار التنفيذ عند تعثر أي ملف فردي
+                            "original_url": url
+                        })
+        except Exception as e:
+            st.error(f"خطأ أثناء قراءة {doc_name}: {e}")
+            
+    return search_index
 
-    return doc_results
+# شريط البحث
+query = st.text_input("🔍 أدخل كلمة البحث أو رقم المادة (مثال: secours par l'arrière / article 203 / freinage):")
 
+with st.spinner("جاري قراءة وتحليل الملفات من Dropbox..."):
+    index_data = load_and_index_from_dropbox()
 
-# ==========================================
-# 4. شريط البحث والتحكم في التنفيذ
-# ==========================================
-query = st.text_input(
-    "🔍 أدخل كلمة البحث أو رقم المادة (مثال: secours par l'arrière / article 203 / freinage):"
-)
-
-if st.button("🚀 بدء البحث"):
-    if not query.strip():
-        st.warning("يرجى كتابة كلمة أو رقم المادة أولاً في شريط البحث.")
-    elif not DROPBOX_PDFS:
-        st.error("قاموس الروابط فارغ! يرجى إضافة الروابط داخل الكود أولاً.")
+if query:
+    results = []
+    query_lower = query.lower()
+    
+    for item in index_data:
+        if query_lower in item["text"].lower():
+            results.append(item)
+            
+    st.write(f"### 📋 النتائج المعثور عليها ({len(results)}):")
+    
+    if not results:
+        st.warning("لم يتم العثور على أي نتيجة مطابقة في الملفات.")
     else:
-        results = []
-        query_lower = query.lower()
+        for res in results:
+            doc_name = res["doc_name"]
+            page_num = res["page"]
+            snippet = res["text"][:350].replace("\n", " ") + "..."
+            
+            # إعداد رابط البث المباشر مع استبدال النطاق ليدعم الفتح المبسط
+            raw_url = res["original_url"].replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("dl=0", "dl=1")
+            
+            # ترميز الرابط لاستخدامه في قارئ PDF.js
+            encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
+            pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
 
-        with st.spinner("⚡ جاري قراءة الملفات من Dropbox واستخراج النتائج..."):
-            # استخدام 20 خيط متوازي لتحميل وقراءة 268 ملفاً في ثوانٍ معدودة
-            with ThreadPoolExecutor(max_workers=20) as executor:
-                all_docs_data = executor.map(
-                    process_single_pdf, DROPBOX_PDFS.items()
-                )
-
-                for doc_data in all_docs_data:
-                    for item in doc_data:
-                        if query_lower in item["text"].lower():
-                            results.append(item)
-
-        st.write(f"### 📋 النتائج المعثور عليها ({len(results)}):")
-
-        if not results:
-            st.warning("لم يتم العثور على أي نتيجة مطابقة في جميع الملفات.")
-        else:
-            for res in results:
-                doc_name = res["doc_name"]
-                page_num = res["page"]
-                snippet = res["text"][:350].replace("\n", " ") + "..."
-                raw_url = res["direct_download_url"]
-
-                # تجهيز رابط القارئ المدمج PDF.js
-                encoded_pdf_url = urllib.parse.quote(raw_url, safe="")
-                pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
-
-                with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
-                    st.write(f"**المقتطع النصي:** {snippet}")
-                    st.markdown(
-                        f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown("---")
-
-                    # معاينة مباشرة للصفحة
-                    pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
-                    st.markdown(pdf_iframe, unsafe_allow_html=True)
+            with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
+                st.write(f"**المقتطع النصي:** {snippet}")
+                
+                # رابط خارجي مباشر يفتح القارئ في تبويب جديد على الصفحة بالضبط
+                st.markdown(f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})", unsafe_allow_html=True)
+                
+                st.markdown("---")
+                st.caption(f"📺 المعاينة المباشرة للصفحة {page_num}:")
+                
+                # العرض المدمج
+                pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
+                st.markdown(pdf_iframe, unsafe_allow_html=True)
 else:
-    st.info(
-        "👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه ثم اضغط على زر 'بدء البحث'."
-    )
+    st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
