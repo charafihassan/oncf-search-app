@@ -3,39 +3,79 @@ import pypdf
 import requests
 import io
 import urllib.parse
+import json
 from PIL import Image
-import pytesseract
 
-# إعدادات الصفحة
+# محاولة استيراد مكتبات OCR بشكل آمن لتجنب توقف التطبيق إذا لم تكن مثبتة
+try:
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+# ------------------------------------------------------------------
+# 1. إعدادات الصفحة
+# ------------------------------------------------------------------
 st.set_page_config(page_title="محرك بحث لوائح ONCF", layout="wide", page_icon="🚆")
 st.title("🚆 محرك البحث المباشر في لوائح ONCF")
-st.markdown("ابحث في المستندات السحابية (يدعم النصوص والصور الممسوحة ضوئياً).")
+st.markdown("""
+ابحث في المستندات السحابية وسيتم توجيهك للمادة والصفحة مباشرة.  
+✅ يدعم الملفات النصية والممسوحة ضوئياً (OCR)
+""")
 
 # ------------------------------------------------------------------
-# قائمة الروابط (تم استخدام القائمة الموثوقة التي قمنا بإنشائها سابقاً)
+# 2. تحميل وتنظيف روابط Dropbox من ملف JSON
 # ------------------------------------------------------------------
-DROPBOX_PDFS = {
-    "Règlement S1A - Titre I": "https://www.dropbox.com/scl/fi/0s8pe3sfugugujyxzby2d/R-glement-S1A-Titre-I-version-03-VS.pdf?rlkey=ldghn6rtfu1tqyavmyiwtct67&dl=1",
-    "Règlement RG S1A titre II facs 0": "https://www.dropbox.com/scl/fi/lay3km0jcb0zaj79na4we/RG-S1A-titre-II-facs-0-zc-VF-sign.pdf?rlkey=jdv71mtl0pwmmmk0pbbikg4l9&dl=1",
-    # ... (قم بلصق باقي الروابط الصحيحة هنا من القائمة التي رتبناها سابقاً) ...
-    "CG S0 n°1.pdf": "https://www.dropbox.com/scl/fi/fjbpyqala3tv0kzvggwet/CG-S0-n-1.pdf?rlkey=t13rntcxf4fteb2rhj7ko8yh1&dl=1",
-    "CG S2C n7 exploitation du systeme de detection des boites chaudes (DBC) sol et embarque, et du systeme de detection de freins bloques (DFB) V05.pdf": "https://www.dropbox.com/scl/fi/hxftftoo44kbj9r4mg2a0/CG-S2C-n7-exploitation-du-systeme-de-detection-des-boites-chaudes-DBC-sol-et-embarque-et-du-systeme-de-detection-de-freins-bloques-DFB-V05.pdf?rlkey=9ixzcfv0c47jpsqkpwujxkg23&dl=1",
-    # تأكد من وجود جميع الروابط هنا
-}
+@st.cache_data(show_spinner=False)
+def load_dropbox_links():
+    """تحميل الروابط من ملف JSON وتنظيفها لتكون قابلة للتنزيل المباشر"""
+    try:
+        with open("DROPBOX_PDFS.json", "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+        
+        clean_links = {}
+        for name, url in raw_data.items():
+            # تنظيف الاسم والرابط من المسافات الزائدة
+            clean_name = name.strip()
+            clean_url = url.strip()
+            
+            # ضمان أن الرابط ينتهي بـ dl=1 للتنزيل المباشر
+            if "&dl=0" in clean_url:
+                clean_url = clean_url.replace("&dl=0", "&dl=1")
+            elif "?dl=0" in clean_url:
+                clean_url = clean_url.replace("?dl=0", "?dl=1")
+            elif "dl=1" not in clean_url:
+                separator = "&" if "?" in clean_url else "?"
+                clean_url += f"{separator}dl=1"
+                
+            clean_links[clean_name] = clean_url
+            
+        return clean_links
+    except Exception as e:
+        st.error(f"❌ خطأ في تحميل ملف الروابط: {e}")
+        return {}
 
+DROPBOX_PDFS = load_dropbox_links()
+
+# ------------------------------------------------------------------
+# 3. دالة الفهرسة الذكية (نص عادي + OCR)
+# ------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def load_and_index_from_dropbox():
-    """تحميل وفهرسة الملفات مع دعم OCR للملفات الممسوحة"""
+    """تحميل وفهرسة جميع ملفات PDF مع دعم OCR للصفحات الممسوحة"""
     search_index = []
     
-    progress_container = st.empty()
-    status_container = st.empty()
+    # واجهة المستخدم للتقدم
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
     total_files = len(DROPBOX_PDFS)
     
     for i, (doc_name, url) in enumerate(DROPBOX_PDFS.items()):
-        progress_container.progress((i + 1) / total_files)
-        status_container.text(f"جاري المعالجة: {doc_name} ({i+1}/{total_files})")
+        # تحديث شريط التقدم
+        progress = (i + 1) / total_files
+        progress_bar.progress(progress)
+        status_text.text(f"⏳ جاري المعالجة: {doc_name} ({i+1}/{total_files})")
         
         try:
             response = requests.get(url, timeout=30)
@@ -44,24 +84,28 @@ def load_and_index_from_dropbox():
                 reader = pypdf.PdfReader(pdf_file)
                 
                 for page_num, page in enumerate(reader.pages, start=1):
-                    text = page.extract_text()
+                    text = page.extract_text() or ""
                     
-                    # 🔍 التحقق مما إذا كان النص فارغاً (ملف ممسوح ضوئياً)
-                    if not text or len(text.strip()) < 10:
+                    # 🔍 التحقق الذكي: هل الصفحة ممسوحة ضوئياً؟
+                    is_scanned = len(text.strip()) < 20
+                    
+                    if is_scanned and OCR_AVAILABLE:
                         try:
-                            # تحويل الصفحة إلى صورة وتطبيق OCR
                             images = page.images
                             if images:
-                                # أخذ أول صورة في الصفحة (عادة ما تكون الصفحة كاملة)
-                                img_data = images[0].data
+                                # أخذ أكبر صورة في الصفحة (عادة تكون الصفحة كاملة)
+                                img_data = max(images, key=lambda x: x.width * x.height).data
                                 image = Image.open(io.BytesIO(img_data))
-                                # استخراج النص باستخدام Tesseract (اللغة الفرنسية والعربية)
+                                
+                                # استخراج النص بالفرنسية والعربية
                                 ocr_text = pytesseract.image_to_string(image, lang='fra+ara')
-                                text = ocr_text
-                        except Exception as ocr_err:
-                            pass  # تجاهل أخطاء OCR والاستمرار
+                                if len(ocr_text.strip()) > len(text.strip()):
+                                    text = ocr_text
+                        except Exception:
+                            pass  # تجاهل أخطاء OCR والاستمرار بالنص الأصلي إن وجد
                     
-                    if text and len(text.strip()) > 5:
+                    # إضافة الصفحة للفهرس فقط إذا احتوت على نص مفيد
+                    if text and len(text.strip()) > 10:
                         search_index.append({
                             "doc_name": doc_name,
                             "page": page_num,
@@ -70,37 +114,44 @@ def load_and_index_from_dropbox():
                         })
             
         except Exception as e:
-            st.warning(f"️ تعذر معالجة {doc_name}: {str(e)[:80]}")
+            st.warning(f"⚠️ تعذر معالجة {doc_name}: {str(e)[:80]}")
             
-    progress_container.empty()
-    status_container.empty()
+    # إخفاء شريط التقدم عند الانتهاء
+    progress_bar.empty()
+    status_text.empty()
+    
     return search_index
 
-# شريط البحث
-query = st.text_input("🔍 أدخل كلمة البحث أو رقم المادة:")
+# ------------------------------------------------------------------
+# 4. واجهة البحث والنتائج
+# ------------------------------------------------------------------
+query = st.text_input(
+    "🔍 أدخل كلمة البحث أو رقم المادة:", 
+    placeholder="مثال: secours par l'arrière / article 203 / freinage / DBC"
+)
 
 if query:
     index_data = load_and_index_from_dropbox()
     
-    results = []
-    query_lower = query.lower()
+    results = [item for item in index_data if query.lower() in item["text"].lower()]
     
-    for item in index_data:
-        if query_lower in item["text"].lower():
-            results.append(item)
-            
-    st.write(f"### 📋 النتائج ({len(results)}):")
+    st.write(f"### 📋 النتائج المعثور عليها ({len(results)}):")
     
     if not results:
-        st.warning("لم يتم العثور على نتائج.")
+        st.warning("لم يتم العثور على أي نتيجة مطابقة في الملفات.")
     else:
         for res in results:
-            snippet = res["text"][:300].replace("\n", " ") + "..."
+            snippet = res["text"][:350].replace("\n", " ") + "..."
+            
+            # إعداد رابط المعاينة المباشر
             encoded_url = urllib.parse.quote(res["original_url"], safe='')
             viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_url}#page={res['page']}"
 
-            with st.expander(f" {res['doc_name']} — ص {res['page']}"):
-                st.write(f"**المقتطف:** {snippet}")
-                st.markdown(f"[🔗 فتح المستند على الصفحة {res['page']}]({viewer_url})")
+            with st.expander(f"📖 {res['doc_name']} — الصفحة {res['page']}"):
+                st.write(f"**المقتطف النصي:** {snippet}")
+                st.markdown(f"[ اضغط هنا لفتح المستند على الصفحة {res['page']} في نافذة كاملة]({viewer_url})")
+                st.markdown("---")
+                st.caption("📺 معاينة مباشرة:")
+                st.markdown(f'<iframe src="{viewer_url}" width="100%" height="600" frameborder="0"></iframe>', unsafe_allow_html=True)
 else:
-    st.info(" اكتب للبحث في جميع اللوائح.")
+    st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
