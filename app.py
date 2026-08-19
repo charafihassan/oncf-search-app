@@ -1,7 +1,8 @@
-import streamlit as st
-import pypdf
-import requests
 import io
+import requests
+from pypdf import PdfReader
+import pypdf
+import streamlit as st
 import urllib.parse
 
 # 1. إعدادات الصفحة
@@ -269,38 +270,60 @@ DROPBOX_PDFS = {
 }
 @st.cache_resource
 def load_and_index_from_dropbox():
-    """تحميل المستندات من Dropbox وقراءتها بالكامل باستخدام المنطق الأول المستقر"""
+    """تحميل المستندات من Dropbox وقراءتها بالكامل مع معالجة النطاق والبرامترات"""
     search_index = []
-    
+
+    # إضافة هيدر لتفادي حظر الطلبات البرمجية
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+
     for doc_name, url in DROPBOX_PDFS.items():
-        # التأكد من جعل رابط Dropbox يحمل مباشرة بدلاً من العرض
-        download_url = url.replace("dl=0", "dl=1")
-        if "dl=1" not in download_url:
+        # 1. تحويل النطاق المباشر وضمان التنزيل المباشر
+        download_url = url.replace(
+            "www.dropbox.com", "dl.dropboxusercontent.com"
+        )
+
+        if "dl=0" in download_url:
+            download_url = download_url.replace("dl=0", "dl=1")
+        elif "dl=1" not in download_url:
             download_url += "&dl=1" if "?" in download_url else "?dl=1"
-        
+
         try:
             # قراءة المادة عبر التنزيل المباشر
-            response = requests.get(download_url, timeout=45)
+            response = requests.get(download_url, headers=headers, timeout=45)
+
             if response.status_code == 200:
                 pdf_file = io.BytesIO(response.content)
                 reader = pypdf.PdfReader(pdf_file)
-                
+
                 for page_num, page in enumerate(reader.pages, start=1):
                     text = page.extract_text()
                     if text:
-                        search_index.append({
-                            "doc_name": doc_name,
-                            "page": page_num,
-                            "text": text,
-                            "original_url": url
-                        })
+                        search_index.append(
+                            {
+                                "doc_name": doc_name,
+                                "page": page_num,
+                                "text": text,
+                                "original_url": url,
+                                "direct_download_url": download_url,  # حفظ الرابط المباشر
+                            }
+                        )
+            else:
+                st.error(
+                    f"تعذر تحميل {doc_name} (رمز الاستجابة: {response.status_code})"
+                )
+
         except Exception as e:
             st.error(f"خطأ أثناء قراءة {doc_name}: {e}")
-            
+
     return search_index
 
+
 # شريط البحث
-query = st.text_input("🔍 أدخل كلمة البحث أو رقم المادة (مثال: secours par l'arrière / article 203 / freinage):")
+query = st.text_input(
+    "🔍 أدخل كلمة البحث أو رقم المادة (مثال: secours par l'arrière / article 203 / freinage):"
+)
 
 with st.spinner("جاري قراءة وتحليل الملفات من Dropbox..."):
     index_data = load_and_index_from_dropbox()
@@ -308,13 +331,13 @@ with st.spinner("جاري قراءة وتحليل الملفات من Dropbox...
 if query:
     results = []
     query_lower = query.lower()
-    
+
     for item in index_data:
         if query_lower in item["text"].lower():
             results.append(item)
-            
+
     st.write(f"### 📋 النتائج المعثور عليها ({len(results)}):")
-    
+
     if not results:
         st.warning("لم يتم العثور على أي نتيجة مطابقة في الملفات.")
     else:
@@ -322,25 +345,30 @@ if query:
             doc_name = res["doc_name"]
             page_num = res["page"]
             snippet = res["text"][:350].replace("\n", " ") + "..."
-            
-            # إعداد رابط البث المباشر مع استبدال النطاق ليدعم الفتح المبسط
-            raw_url = res["original_url"].replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("dl=0", "dl=1")
-            
+
+            # استخدام الرابط المباشر المحفوظ لـ PDF.js
+            raw_url = res["direct_download_url"]
+
             # ترميز الرابط لاستخدامه في قارئ PDF.js
-            encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
+            encoded_pdf_url = urllib.parse.quote(raw_url, safe="")
             pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
 
             with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
                 st.write(f"**المقتطع النصي:** {snippet}")
-                
-                # رابط خارجي مباشر يفتح القارئ في تبويب جديد على الصفحة بالضبط
-                st.markdown(f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})", unsafe_allow_html=True)
-                
+
+                # رابط خارجي مباشر
+                st.markdown(
+                    f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})",
+                    unsafe_allow_html=True,
+                )
+
                 st.markdown("---")
                 st.caption(f"📺 المعاينة المباشرة للصفحة {page_num}:")
-                
+
                 # العرض المدمج
                 pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
                 st.markdown(pdf_iframe, unsafe_allow_html=True)
 else:
-    st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
+    st.info(
+        "👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج."
+    )
