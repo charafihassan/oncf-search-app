@@ -330,10 +330,9 @@ if query:
             # ترميز الرابط واستخراج نص البحث للتعديل المطلوب
             encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
             encoded_query = urllib.parse.quote(query, safe='')
-            
+     
             # 🔑 التعديل الوحيد المطلوب: إضافة #search= لتظليل الكلمة بالأصفر
             pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#search={encoded_query}&page={page_num}"
-
             with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
                 st.write(f"**المقتطع النصي:** {snippet}")
                 
