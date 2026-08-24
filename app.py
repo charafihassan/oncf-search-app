@@ -276,6 +276,7 @@ def load_dropbox_links():
         
         clean_links = {}
         for name, url in raw_data.items():
+            # تنظيف المسافات وتحويل dl=0 إلى dl=1
             clean_name = name.strip()
             clean_url = url.strip().replace("&dl=0", "&dl=1").replace("?dl=0", "?dl=1")
             if "dl=1" not in clean_url:
@@ -290,16 +291,10 @@ def load_dropbox_links():
 DROPBOX_PDFS = load_dropbox_links()
 
 # ------------------------------------------------------------------
-# 2. تهيئة الجلسة وبناء الفهرس مرة واحدة فقط
+# 2. الفهرسة السريعة والمخزنة (لا تتكرر إلا عند تغيير الروابط)
 # ------------------------------------------------------------------
-if "search_index" not in st.session_state:
-    st.session_state.search_index = None
-
+@st.cache_data(show_spinner=True)  # spinner=True هنا مقبول لأنه يحدث مرة واحدة فقط عند التحديث
 def build_search_index():
-    """بناء الفهرس وتخزينه في الجلسة لتجنب إعادة التحميل"""
-    if st.session_state.search_index is not None:
-        return st.session_state.search_index
-        
     search_index = []
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -329,18 +324,16 @@ def build_search_index():
             
     progress_bar.empty()
     status_text.empty()
-    st.session_state.search_index = search_index
-    st.success(f"✅ تم بناء الفهرس! ({len(search_index)} صفحة جاهزة للبحث)")
     return search_index
 
-# بدء الفهرسة تلقائياً عند أول زيارة
+# استدعاء الدالة (ستستخدم النسخة المخزنة إذا لم تتغير الروابط)
 index_data = build_search_index()
 
 # ------------------------------------------------------------------
-# 3. شريط البحث وعرض النتائج مع التظليل الأصفر
+# 3. البحث والتظليل الأصفر (فوري تماماً)
 # ------------------------------------------------------------------
 query = st.text_input(
-    " أدخل كلمة البحث أو رقم المادة:", 
+    "🔍 أدخل كلمة البحث أو رقم المادة:", 
     placeholder="مثال: secours par l'arrière / article 203 / freinage / DBC"
 )
 
@@ -355,16 +348,15 @@ if query and index_data:
         for res in results:
             snippet = res["text"][:350].replace("\n", " ") + "..."
             
-            # 🔑 تعديل رابط المعاينة لإضافة التظليل الأصفر للكلمة المبحوث عنها
+            # 🔑 السر هنا: إضافة #search= إلى الرابط لتفعيل التظليل دون إعادة فهرسة
             encoded_pdf_url = urllib.parse.quote(res["original_url"], safe='')
             encoded_query = urllib.parse.quote(query, safe='')
-            # ترتيب المعلمة مهم: search قبل page لضمان التظليل الصحيح
             viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#search={encoded_query}&page={res['page']}"
 
             with st.expander(f"📖 {res['doc_name']} — الصفحة {res['page']}"):
                 st.write(f"**المقتطف النصي:** {snippet}")
-                st.markdown(f"[ اضغط هنا لفتح المستند مع تظليل \"{query}\" بالصفحة {res['page']} في نافذة كاملة]({viewer_url})")
+                st.markdown(f"[🔗 فتح المستند مع تظليل \"{query}\" بالصفحة {res['page']} في نافذة كاملة]({viewer_url})")
                 st.caption("📺 معاينة مباشرة (الكلمة مظللة بالأصفر تلقائياً):")
                 st.markdown(f'<iframe src="{viewer_url}" width="100%" height="600" frameborder="0"></iframe>', unsafe_allow_html=True)
 elif not query:
-    st.info("👆 اكتب للبحث. الفهرس جاهز والنتائج فورية!")
+    st.info("👆 اكتب للبحث. النتائج فورية!")
