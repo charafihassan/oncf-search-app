@@ -3,6 +3,7 @@ import pypdf
 import requests
 import io
 import urllib.parse
+import json
 
 # 1. إعدادات الصفحة
 st.set_page_config(page_title="محرك بحث لوائح ONCF", layout="wide", page_icon="🚆")
@@ -267,81 +268,103 @@ DROPBOX_PDFS = {
     "CDP TR 46a n°7.pdf": "https://dl.dropboxusercontent.com/scl/fi/s41m0943lm510943lm43l/CDP-TR-46a-n-7.pdf?rlkey=m901s41m0943lm510943lm43l",
     "CDs S2B n°1.pdf": "https://dl.dropboxusercontent.com/scl/fi/m901s41m0943lm510943l/CDs-S2B-n-1.pdf?rlkey=m43lm901s41m0943lm510943lm"
 }
-@st.cache_resource
-def load_and_index_from_dropbox():
-    """تحميل المستندات من Dropbox وقراءتها بالكامل باستخدام المنطق الأول المستقر"""
+@st.cache_data(show_spinner=False)
+def load_dropbox_links():
+    try:
+        with open("DROPBOX_PDFS.json", "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+        
+        clean_links = {}
+        for name, url in raw_data.items():
+            clean_name = name.strip()
+            clean_url = url.strip().replace("&dl=0", "&dl=1").replace("?dl=0", "?dl=1")
+            if "dl=1" not in clean_url:
+                sep = "&" if "?" in clean_url else "?"
+                clean_url += f"{sep}dl=1"
+            clean_links[clean_name] = clean_url
+        return clean_links
+    except Exception as e:
+        st.error(f"❌ خطأ في تحميل الروابط: {e}")
+        return {}
+
+DROPBOX_PDFS = load_dropbox_links()
+
+# ------------------------------------------------------------------
+# 2. تهيئة الجلسة وبناء الفهرس مرة واحدة فقط
+# ------------------------------------------------------------------
+if "search_index" not in st.session_state:
+    st.session_state.search_index = None
+
+def build_search_index():
+    """بناء الفهرس وتخزينه في الجلسة لتجنب إعادة التحميل"""
+    if st.session_state.search_index is not None:
+        return st.session_state.search_index
+        
     search_index = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    total_files = len(DROPBOX_PDFS)
     
-    for doc_name, url in DROPBOX_PDFS.items():
-        # التأكد من جعل رابط Dropbox يحمل مباشرة بدلاً من العرض
-        download_url = url.replace("dl=0", "dl=1")
-        if "dl=1" not in download_url:
-            download_url += "&dl=1" if "?" in download_url else "?dl=1"
+    for i, (doc_name, url) in enumerate(DROPBOX_PDFS.items()):
+        progress_bar.progress((i + 1) / total_files)
+        status_text.text(f"⏳ جاري الفهرسة: {doc_name} ({i+1}/{total_files})")
         
         try:
-            # قراءة المادة عبر التنزيل المباشر
-            response = requests.get(download_url, timeout=45)
+            response = requests.get(url, timeout=30)
             if response.status_code == 200:
                 pdf_file = io.BytesIO(response.content)
                 reader = pypdf.PdfReader(pdf_file)
                 
                 for page_num, page in enumerate(reader.pages, start=1):
-                    text = page.extract_text()
-                    if text:
+                    text = page.extract_text() or ""
+                    if text and len(text.strip()) > 10:
                         search_index.append({
                             "doc_name": doc_name,
                             "page": page_num,
                             "text": text,
                             "original_url": url
                         })
-        except Exception as e:
-            st.error(f"خطأ أثناء قراءة {doc_name}: {e}")
+        except Exception:
+            pass
             
+    progress_bar.empty()
+    status_text.empty()
+    st.session_state.search_index = search_index
+    st.success(f"✅ تم بناء الفهرس! ({len(search_index)} صفحة جاهزة للبحث)")
     return search_index
 
-# شريط البحث
-query = st.text_input("🔍 أدخل كلمة البحث أو رقم المادة (مثال: secours par l'arrière / article 203 / freinage):")
+# بدء الفهرسة تلقائياً عند أول زيارة
+index_data = build_search_index()
 
-with st.spinner("جاري قراءة وتحليل الملفات من Dropbox..."):
-    index_data = load_and_index_from_dropbox()
+# ------------------------------------------------------------------
+# 3. شريط البحث وعرض النتائج مع التظليل الأصفر
+# ------------------------------------------------------------------
+query = st.text_input(
+    " أدخل كلمة البحث أو رقم المادة:", 
+    placeholder="مثال: secours par l'arrière / article 203 / freinage / DBC"
+)
 
-if query:
-    results = []
-    query_lower = query.lower()
+if query and index_data:
+    results = [item for item in index_data if query.lower() in item["text"].lower()]
     
-    for item in index_data:
-        if query_lower in item["text"].lower():
-            results.append(item)
-            
     st.write(f"### 📋 النتائج المعثور عليها ({len(results)}):")
     
     if not results:
-        st.warning("لم يتم العثور على أي نتيجة مطابقة في الملفات.")
+        st.warning("لم يتم العثور على أي نتيجة مطابقة.")
     else:
         for res in results:
-            doc_name = res["doc_name"]
-            page_num = res["page"]
             snippet = res["text"][:350].replace("\n", " ") + "..."
             
-            # إعداد رابط البث المباشر مع استبدال النطاق ليدعم الفتح المبسط
-            raw_url = res["original_url"].replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("dl=0", "dl=1")
-            
-            # ترميز الرابط لاستخدامه في قارئ PDF.js
-            encoded_pdf_url = urllib.parse.quote(raw_url, safe='')
-            pdf_js_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#page={page_num}"
+            # 🔑 تعديل رابط المعاينة لإضافة التظليل الأصفر للكلمة المبحوث عنها
+            encoded_pdf_url = urllib.parse.quote(res["original_url"], safe='')
+            encoded_query = urllib.parse.quote(query, safe='')
+            # ترتيب المعلمة مهم: search قبل page لضمان التظليل الصحيح
+            viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_pdf_url}#search={encoded_query}&page={res['page']}"
 
-            with st.expander(f"📖 {doc_name} — الصفحة {page_num}"):
-                st.write(f"**المقتطع النصي:** {snippet}")
-                
-                # رابط خارجي مباشر يفتح القارئ في تبويب جديد على الصفحة بالضبط
-                st.markdown(f"👉 [**🔗 اضغط هنا لفتح {doc_name} على الصفحة {page_num} في نافذة كاملة**]({pdf_js_viewer_url})", unsafe_allow_html=True)
-                
-                st.markdown("---")
-                st.caption(f"📺 المعاينة المباشرة للصفحة {page_num}:")
-                
-                # العرض المدمج
-                pdf_iframe = f'<iframe src="{pdf_js_viewer_url}" width="100%" height="600" frameborder="0"></iframe>'
-                st.markdown(pdf_iframe, unsafe_allow_html=True)
-else:
-    st.info("👆 اكتب أي كلمة أو رقم مادة في شريط البحث أعلاه لبدء استخراج النتائج.")
-  
+            with st.expander(f"📖 {res['doc_name']} — الصفحة {res['page']}"):
+                st.write(f"**المقتطف النصي:** {snippet}")
+                st.markdown(f"[ اضغط هنا لفتح المستند مع تظليل \"{query}\" بالصفحة {res['page']} في نافذة كاملة]({viewer_url})")
+                st.caption("📺 معاينة مباشرة (الكلمة مظللة بالأصفر تلقائياً):")
+                st.markdown(f'<iframe src="{viewer_url}" width="100%" height="600" frameborder="0"></iframe>', unsafe_allow_html=True)
+elif not query:
+    st.info("👆 اكتب للبحث. الفهرس جاهز والنتائج فورية!")
